@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "Food Tracker",
+    "slug": "food-tracker",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#4CAF50"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.yourname.foodtracker",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Food Tracker uses the camera to photograph your meals for nutritional analysis.",
+        "NSPhotoLibraryUsageDescription": "Food Tracker accesses your photos so you can select meal images for analysis."
+      }
+    },
+    "android": {
+      "package": "com.yourname.foodtracker",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#4CAF50"
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Food Tracker to access your photos for meal analysis.",
+          "cameraPermission": "Allow Food Tracker to use the camera to photograph meals."
+        }
+      ]
+    ]
+  }
+}
