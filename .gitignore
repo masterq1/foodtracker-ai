@@ -15,3 +15,4 @@ web-build/
 
 # LLM continuity file — local only, never commit
 .memory.md
+android/
