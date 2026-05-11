@@ -120,6 +120,23 @@ export default function MealDetailScreen({ route, navigation }) {
           <StatCard value={meal.fatGrams}     unit="g" label="Fat"     emoji="🥑" accentColor="#7E22CE" />
         </View>
 
+        {/* ── WW Points ── */}
+        {(meal.wwPoints || 0) > 0 && (
+          <View style={styles.wwCard}>
+            <View style={styles.wwLeft}>
+              <Text style={styles.wwEmoji}>🏋️</Text>
+              <View>
+                <Text style={styles.wwTitle}>Weight Watchers Points</Text>
+                <Text style={styles.wwSubtitle}>estimated PersonalPoints for this meal</Text>
+              </View>
+            </View>
+            <View style={styles.wwRight}>
+              <Text style={styles.wwValue}>{meal.wwPoints}</Text>
+              <Text style={styles.wwUnit}> pts</Text>
+            </View>
+          </View>
+        )}
+
         {/* ── Glucose Impact ── */}
         {meal.glucoseRiseMgDl > 0 && (
           <View style={styles.glucoseCard}>
@@ -236,6 +253,32 @@ const styles = StyleSheet.create({
   statNumber: { fontSize: 28, fontWeight: '800', color: colors.text },
   statUnit:   { fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 1 },
   statLabel:  { fontSize: fontSize.xs, color: colors.textSecondary, fontWeight: '600', marginTop: 2 },
+
+  // WW points card — blue accent
+  wwCard: {
+    marginHorizontal: spacing.md,
+    marginBottom:     spacing.sm,
+    backgroundColor:  colors.white,
+    borderRadius:     radius.lg,
+    padding:          spacing.lg,
+    borderTopWidth:   3,
+    borderTopColor:   '#1D4ED8',
+    shadowColor:      '#000',
+    shadowOffset:     { width: 0, height: 2 },
+    shadowOpacity:    0.07,
+    shadowRadius:     8,
+    elevation:        3,
+    flexDirection:    'row',
+    alignItems:       'center',
+    justifyContent:   'space-between',
+  },
+  wwLeft:     { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  wwEmoji:    { fontSize: 24, marginRight: spacing.sm },
+  wwTitle:    { fontSize: fontSize.md, fontWeight: '700', color: colors.text },
+  wwSubtitle: { fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 2 },
+  wwRight:    { flexDirection: 'row', alignItems: 'baseline' },
+  wwValue:    { fontSize: 28, fontWeight: '800', color: '#1D4ED8' },
+  wwUnit:     { fontSize: fontSize.sm, color: colors.textSecondary },
 
   // Glucose card
   glucoseCard: {

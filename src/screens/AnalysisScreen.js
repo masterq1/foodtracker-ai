@@ -32,7 +32,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { analyzeFoodImage, reanalyzeFoodFromText, getActiveModelInfo, modelDisplayName } from '../services/geminiApi';
-import { saveMeal, getSettings, getModelUsageToday, AVAILABLE_MODELS } from '../services/storage';
+import { addMealDirect, getSettings, getModelUsageToday, AVAILABLE_MODELS, getDateKey } from '../services/storage';
 import { colors, spacing, fontSize, radius } from '../theme';
 
 // ─── Image Persistence ────────────────────────────────────────────────────────
@@ -111,11 +111,26 @@ export default function AnalysisScreen({ route, navigation }) {
   const [saving, setSaving]           = useState(false);  // true while saving the meal to storage
   const [error, setError]             = useState(null);   // error message string if analysis failed
 
-  // Edit mode: the user can tap "Edit" to modify the food name and ingredients before saving
+  // Edit mode: the user can tap "Edit" to modify any field before saving
   const [editing, setEditing]         = useState(false);
   const [reanalyzing, setReanalyzing] = useState(false);  // true while re-analysis API call is in flight
   const [editedName, setEditedName]   = useState('');
   const [editedIngredients, setEditedIngredients] = useState([]);
+
+  // Editable numeric fields (shown in edit mode; override the AI analysis on save)
+  const [editedCalories,  setEditedCalories]  = useState('0');
+  const [editedWeight,    setEditedWeight]    = useState('0');
+  const [editedProtein,   setEditedProtein]   = useState('0');
+  const [editedCarbs,     setEditedCarbs]     = useState('0');
+  const [editedFat,       setEditedFat]       = useState('0');
+  const [editedWwPoints,  setEditedWwPoints]  = useState('0');
+
+  // Editable date/time (default to now, can be overridden before saving)
+  const [editedDate, setEditedDate] = useState(dateKey || getDateKey());
+  const [editedTime, setEditedTime] = useState(() => {
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  });
 
   // Model info shown in the loading card so the user can see which model is being used
   const [activeModel, setActiveModel] = useState('');
@@ -132,11 +147,17 @@ export default function AnalysisScreen({ route, navigation }) {
     runAnalysis();
   }, []);
 
-  // When a new analysis result arrives, initialise the edit state and fade in
+  // When a new analysis result arrives, populate all edit fields and fade in
   useEffect(() => {
     if (analysis) {
       setEditedName(analysis.foodName || '');
       setEditedIngredients(analysis.ingredients ? [...analysis.ingredients] : []);
+      setEditedCalories(String(analysis.totalCalories    || 0));
+      setEditedWeight  (String(analysis.totalWeightGrams || 0));
+      setEditedProtein (String(analysis.proteinGrams     || 0));
+      setEditedCarbs   (String(analysis.carbsGrams       || 0));
+      setEditedFat     (String(analysis.fatGrams         || 0));
+      setEditedWwPoints(String(analysis.wwPoints         || 0));
       // Animate the results into view over 400ms
       Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
     }
@@ -234,29 +255,59 @@ export default function AnalysisScreen({ route, navigation }) {
    */
   async function handleSave() {
     if (!analysis) return;
+
+    // Validate date
+    const dateTest = new Date(editedDate + 'T12:00:00');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(editedDate) || isNaN(dateTest.getTime())) {
+      Alert.alert('Invalid Date', 'Enter date as YYYY-MM-DD (e.g. 2025-06-01).');
+      return;
+    }
+    // Validate time
+    const [hStr, mStr] = editedTime.split(':');
+    const h = parseInt(hStr, 10);
+    const m = parseInt(mStr, 10);
+    if (!/^\d{2}:\d{2}$/.test(editedTime) || h > 23 || m > 59) {
+      Alert.alert('Invalid Time', 'Enter time as HH:MM in 24-hour format (e.g. 14:30).');
+      return;
+    }
+
     setSaving(true);
     try {
       const settings = await getSettings();
 
-      // Auto-save to gallery using the original temp URI, before it's copied to
-      // the app's private document directory. The document-directory path is
-      // sandboxed and not readable by the media library service on Android.
+      // Auto-save to gallery using original temp URI (before copying to app's private sandbox)
       if (settings.autoSaveToGallery) {
         try {
           const { status } = await MediaLibrary.requestPermissionsAsync();
           if (status === 'granted') await MediaLibrary.saveToLibraryAsync(imageUri);
-        } catch {}  // silently ignore gallery save failures
+        } catch {}
       }
 
       const permanentUri = await persistImage(imageUri);
 
-      // Always apply the edited name/ingredients — they mirror analysis values when not in edit mode
-      await saveMeal({
+      // Build a precise timestamp from the user-editable date + time fields
+      const d = new Date(editedDate + 'T12:00:00');
+      d.setHours(h, m, 0, 0);
+      const timestamp = d.toISOString();
+
+      // Merge: AI analysis base + edited overrides for all user-adjustable fields
+      const meal = {
         ...analysis,
-        foodName:    editedName,
-        ingredients: editedIngredients,
-        imageUri:    permanentUri,
-      }, dateKey || null);
+        id:               Date.now(),
+        timestamp,
+        foodName:         editedName,
+        ingredients:      editedIngredients,
+        totalCalories:    parseInt(editedCalories,  10) || 0,
+        totalWeightGrams: parseInt(editedWeight,    10) || 0,
+        proteinGrams:     parseInt(editedProtein,   10) || 0,
+        carbsGrams:       parseInt(editedCarbs,     10) || 0,
+        fatGrams:         parseInt(editedFat,       10) || 0,
+        wwPoints:         parseInt(editedWwPoints,  10) || 0,
+        imageUri:         permanentUri,
+      };
+
+      // Use addMealDirect to preserve our custom timestamp (saveMeal always overwrites it)
+      await addMealDirect(meal, editedDate);
       navigation.navigate('Home');
     } catch (err) {
       Alert.alert('Save Failed', 'Could not save meal: ' + err.message);
@@ -269,7 +320,7 @@ export default function AnalysisScreen({ route, navigation }) {
 
   return (
     <View style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
 
         {/* Full-width photo preview at the top */}
         <Image source={{ uri: imageUri }} style={styles.image} resizeMode="cover" />
@@ -346,18 +397,113 @@ export default function AnalysisScreen({ route, navigation }) {
               )}
             </View>
 
+            {/* ── Date & Time (edit mode only) ── */}
+            {editing && (
+              <View style={styles.editCard}>
+                <Text style={styles.editCardTitle}>Date & Time</Text>
+                <View style={styles.editRow}>
+                  <View style={styles.editField}>
+                    <Text style={styles.editFieldLabel}>Date</Text>
+                    <TextInput
+                      style={styles.editFieldInput}
+                      value={editedDate}
+                      onChangeText={setEditedDate}
+                      placeholder="YYYY-MM-DD"
+                      placeholderTextColor={colors.border}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      maxLength={10}
+                    />
+                  </View>
+                  <View style={styles.editField}>
+                    <Text style={styles.editFieldLabel}>Time (24h)</Text>
+                    <TextInput
+                      style={styles.editFieldInput}
+                      value={editedTime}
+                      onChangeText={setEditedTime}
+                      placeholder="HH:MM"
+                      placeholderTextColor={colors.border}
+                      keyboardType="numeric"
+                      maxLength={5}
+                    />
+                  </View>
+                </View>
+              </View>
+            )}
+
             {/* ── Calories + Weight ── */}
-            <View style={styles.statsRow}>
-              <StatCard value={analysis.totalCalories}    unit="kcal" label="Calories" emoji="🔥" accentColor={colors.secondary} />
-              <StatCard value={analysis.totalWeightGrams} unit="g"    label="Weight"   emoji="⚖️" accentColor={colors.primary} />
-            </View>
+            {editing ? (
+              <View style={styles.editCard}>
+                <Text style={styles.editCardTitle}>Serving</Text>
+                <View style={styles.editRow}>
+                  <View style={styles.editField}>
+                    <Text style={styles.editFieldLabel}>Calories (kcal)</Text>
+                    <TextInput style={styles.editFieldInput} value={editedCalories} onChangeText={setEditedCalories} keyboardType="number-pad" selectTextOnFocus />
+                  </View>
+                  <View style={styles.editField}>
+                    <Text style={styles.editFieldLabel}>Weight (g)</Text>
+                    <TextInput style={styles.editFieldInput} value={editedWeight} onChangeText={setEditedWeight} keyboardType="number-pad" selectTextOnFocus />
+                  </View>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.statsRow}>
+                <StatCard value={analysis.totalCalories}    unit="kcal" label="Calories" emoji="🔥" accentColor={colors.secondary} />
+                <StatCard value={analysis.totalWeightGrams} unit="g"    label="Weight"   emoji="⚖️" accentColor={colors.primary} />
+              </View>
+            )}
 
             {/* ── Macronutrients ── */}
-            <View style={styles.macroRow}>
-              <StatCard value={analysis.proteinGrams} unit="g" label="Protein" emoji="💪" accentColor="#1D4ED8" />
-              <StatCard value={analysis.carbsGrams}   unit="g" label="Carbs"   emoji="🌾" accentColor="#C2410C" />
-              <StatCard value={analysis.fatGrams}     unit="g" label="Fat"     emoji="🥑" accentColor="#7E22CE" />
-            </View>
+            {editing ? (
+              <View style={styles.editCard}>
+                <Text style={styles.editCardTitle}>Macronutrients</Text>
+                <View style={styles.editRow}>
+                  <View style={styles.editField}>
+                    <Text style={[styles.editFieldLabel, { color: '#1D4ED8' }]}>Protein (g)</Text>
+                    <TextInput style={[styles.editFieldInput, { borderColor: '#BFDBFE' }]} value={editedProtein} onChangeText={setEditedProtein} keyboardType="number-pad" selectTextOnFocus />
+                  </View>
+                  <View style={styles.editField}>
+                    <Text style={[styles.editFieldLabel, { color: '#C2410C' }]}>Carbs (g)</Text>
+                    <TextInput style={[styles.editFieldInput, { borderColor: '#FED7AA' }]} value={editedCarbs} onChangeText={setEditedCarbs} keyboardType="number-pad" selectTextOnFocus />
+                  </View>
+                  <View style={styles.editField}>
+                    <Text style={[styles.editFieldLabel, { color: '#7E22CE' }]}>Fat (g)</Text>
+                    <TextInput style={[styles.editFieldInput, { borderColor: '#E9D5FF' }]} value={editedFat} onChangeText={setEditedFat} keyboardType="number-pad" selectTextOnFocus />
+                  </View>
+                </View>
+                <View style={[styles.editRow, { marginTop: spacing.sm }]}>
+                  <View style={styles.editField}>
+                    <Text style={[styles.editFieldLabel, { color: '#1D4ED8' }]}>WW Points</Text>
+                    <TextInput style={[styles.editFieldInput, { borderColor: '#BFDBFE' }]} value={editedWwPoints} onChangeText={setEditedWwPoints} keyboardType="number-pad" selectTextOnFocus />
+                  </View>
+                  <View style={[styles.editField, styles.editFieldEmpty]} />
+                  <View style={[styles.editField, styles.editFieldEmpty]} />
+                </View>
+              </View>
+            ) : (
+              <View style={styles.macroRow}>
+                <StatCard value={analysis.proteinGrams} unit="g" label="Protein" emoji="💪" accentColor="#1D4ED8" />
+                <StatCard value={analysis.carbsGrams}   unit="g" label="Carbs"   emoji="🌾" accentColor="#C2410C" />
+                <StatCard value={analysis.fatGrams}     unit="g" label="Fat"     emoji="🥑" accentColor="#7E22CE" />
+              </View>
+            )}
+
+            {/* ── WW Points Card ── */}
+            {(analysis.wwPoints || 0) > 0 && (
+              <View style={styles.wwCard}>
+                <View style={styles.wwLeft}>
+                  <Text style={styles.wwEmoji}>🏋️</Text>
+                  <View>
+                    <Text style={styles.wwTitle}>Weight Watchers Points</Text>
+                    <Text style={styles.wwSubtitle}>estimated PersonalPoints for this meal</Text>
+                  </View>
+                </View>
+                <View style={styles.wwRight}>
+                  <Text style={styles.wwValue}>{analysis.wwPoints}</Text>
+                  <Text style={styles.wwUnit}> pts</Text>
+                </View>
+              </View>
+            )}
 
             {/* ── Glucose Impact Card ── */}
             {/* Only shown when the model returned a non-zero estimate */}
@@ -588,6 +734,52 @@ const styles = StyleSheet.create({
   statNumber: { fontSize: 28, fontWeight: '800', color: colors.text },
   statUnit:   { fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 1 },
   statLabel:  { fontSize: fontSize.xs, color: colors.textSecondary, fontWeight: '600', marginTop: 2 },
+
+  // Editable field card (shown in edit mode in place of stat cards)
+  editCard: {
+    marginHorizontal: spacing.md,
+    marginBottom:     spacing.sm,
+    backgroundColor:  colors.white,
+    borderRadius:     radius.lg,
+    padding:          spacing.md,
+    shadowColor:      '#000',
+    shadowOffset:     { width: 0, height: 1 },
+    shadowOpacity:    0.06,
+    shadowRadius:     6,
+    elevation:        2,
+  },
+  editCardTitle:   { fontSize: fontSize.xs, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: spacing.sm },
+  editRow:         { flexDirection: 'row', gap: spacing.sm },
+  editField:       { flex: 1 },
+  editFieldEmpty:  { flex: 1 },
+  editFieldLabel:  { fontSize: fontSize.xs, fontWeight: '700', color: colors.textSecondary, marginBottom: 4 },
+  editFieldInput:  { borderWidth: 1.5, borderColor: colors.border, borderRadius: radius.md, paddingVertical: spacing.xs + 2, paddingHorizontal: spacing.sm, fontSize: fontSize.lg, fontWeight: '700', color: colors.text, textAlign: 'center', backgroundColor: colors.background },
+
+  // WW points card — blue accent
+  wwCard: {
+    marginHorizontal: spacing.md,
+    marginBottom:     spacing.sm,
+    backgroundColor:  colors.white,
+    borderRadius:     radius.lg,
+    padding:          spacing.lg,
+    borderTopWidth:   3,
+    borderTopColor:   '#1D4ED8',
+    shadowColor:      '#000',
+    shadowOffset:     { width: 0, height: 2 },
+    shadowOpacity:    0.07,
+    shadowRadius:     8,
+    elevation:        3,
+    flexDirection:    'row',
+    alignItems:       'center',
+    justifyContent:   'space-between',
+  },
+  wwLeft:     { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  wwEmoji:    { fontSize: 24, marginRight: spacing.sm },
+  wwTitle:    { fontSize: fontSize.md, fontWeight: '700', color: colors.text },
+  wwSubtitle: { fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 2 },
+  wwRight:    { flexDirection: 'row', alignItems: 'baseline' },
+  wwValue:    { fontSize: 28, fontWeight: '800', color: '#1D4ED8' },
+  wwUnit:     { fontSize: fontSize.sm, color: colors.textSecondary },
 
   // Glucose impact card — amber accent
   glucoseCard: {

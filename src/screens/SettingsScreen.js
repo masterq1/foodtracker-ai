@@ -66,6 +66,7 @@ export default function SettingsScreen() {
   // Feature toggles
   const [autoSaveToGallery, setAutoSaveToGallery] = useState(false);
   const [bodyWeightEnabled, setBodyWeightEnabled] = useState(false);
+  const [wwPointsEnabled, setWwPointsEnabled] = useState(false);
   // Toggle to show/hide the API key characters (secureTextEntry)
   const [showKey, setShowKey] = useState(false);
 
@@ -114,6 +115,7 @@ export default function SettingsScreen() {
     setWeightUnit(settings.weightUnit || 'lbs');
     setAutoSaveToGallery(!!settings.autoSaveToGallery);
     setBodyWeightEnabled(!!settings.bodyWeightEnabled);
+    setWwPointsEnabled(!!settings.wwPointsEnabled);
     setModelPriority(priority);
 
     // Load usage counts for all known models, not just the ones in the priority list
@@ -138,6 +140,7 @@ export default function SettingsScreen() {
       weightUnit,
       autoSaveToGallery,
       bodyWeightEnabled,
+      wwPointsEnabled,
       ...updates,
     });
   }
@@ -155,6 +158,7 @@ export default function SettingsScreen() {
       weightUnit,
       autoSaveToGallery,
       bodyWeightEnabled,
+      wwPointsEnabled,
     });
     setSavedKeyIndicator(true);
     setTimeout(() => setSavedKeyIndicator(false), 2500);
@@ -171,7 +175,7 @@ export default function SettingsScreen() {
       Alert.alert('Invalid Goal', 'Daily calorie goal must be between 500 and 10,000.');
       return;
     }
-    await saveSettings({ apiKey: apiKey.trim(), dailyCalorieGoal: goal, averageDays: parseInt(averageDays, 10) || 5, weightUnit, autoSaveToGallery, bodyWeightEnabled });
+    await saveSettings({ apiKey: apiKey.trim(), dailyCalorieGoal: goal, averageDays: parseInt(averageDays, 10) || 5, weightUnit, autoSaveToGallery, bodyWeightEnabled, wwPointsEnabled });
     setSavedIndicator(true);
     setTimeout(() => setSavedIndicator(false), 2500);
   }
@@ -446,6 +450,27 @@ export default function SettingsScreen() {
             ))}
           </View>
         )}
+
+        <View style={styles.featureDivider} />
+
+        {/* Weight Watchers points toggle */}
+        <View style={styles.featureRow}>
+          <View style={styles.featureLeft}>
+            <Text style={styles.featureLabel}>Weight Watchers points</Text>
+            <Text style={styles.featureDesc}>Show AI-estimated WW PersonalPoints for each meal and daily totals</Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.featureToggle, wwPointsEnabled && styles.featureToggleOn]}
+            onPress={() => {
+              const next = !wwPointsEnabled;
+              setWwPointsEnabled(next);
+              saveFeature({ wwPointsEnabled: next });
+            }}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.featureThumb, wwPointsEnabled && styles.featureThumbOn]} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* ══ Section 3: AI Model Priority ══ */}
@@ -665,7 +690,7 @@ export default function SettingsScreen() {
       {/* App version footer */}
       <View style={styles.footer}>
         <Text style={styles.footerVersion}>Food Tracker AI</Text>
-        <Text style={styles.footerVersion}>Version 1.0</Text>
+        <Text style={styles.footerVersion}>Version 1.1</Text>
         <Text style={styles.footerText}>Powered by Google Gemini</Text>
       </View>
     </ScrollView>

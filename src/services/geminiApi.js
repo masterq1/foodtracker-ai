@@ -104,6 +104,7 @@ async function callWithRetry(model, body, apiKey, retries = 2) {
  *   carbsGrams       — grams (integer)
  *   fatGrams         — grams (integer)
  *   glucoseRiseMgDl  — estimated post-meal blood glucose rise (20–100 mg/dL typical)
+ *   wwPoints         — estimated Weight Watchers PersonalPoints (integer)
  *   confidence       — "high" | "medium" | "low"
  *   notes            — brief caveat about estimation accuracy
  */
@@ -120,6 +121,7 @@ const PROMPT = `You are a professional nutritionist. Analyze this food image car
   "carbsGrams": <integer>,
   "fatGrams": <integer>,
   "glucoseRiseMgDl": <integer>,
+  "wwPoints": <integer>,
   "confidence": "high" | "medium" | "low",
   "notes": "brief note about estimation accuracy"
 }
@@ -129,6 +131,7 @@ Guidelines:
 - If multiple items are visible, include all and sum the totals
 - Ensure protein + carbs + fat macros are consistent with the calorie total (roughly: protein*4 + carbs*4 + fat*9 ≈ calories)
 - glucoseRiseMgDl: estimate the expected blood glucose rise in mg/dL for an average healthy adult after consuming this meal (consider glycemic index, carb content, fiber, fat, and protein); typical range is 20–100 mg/dL
+- wwPoints: estimate Weight Watchers PersonalPoints using the standard WW methodology (based on calories, saturated fat, sugar, protein, and fiber content); typical meal range is 0–30 points; lean proteins and vegetables score lower, fried/sweet/high-fat foods score higher
 - Set confidence to "low" if the image is unclear`;
 
 // ─── Request Building ─────────────────────────────────────────────────────────
@@ -251,6 +254,7 @@ function parseNutritionResult(data, errorMsg) {
     result.carbsGrams       = Math.round(Number(result.carbsGrams)       || 0);
     result.fatGrams         = Math.round(Number(result.fatGrams)         || 0);
     result.glucoseRiseMgDl  = Math.round(Number(result.glucoseRiseMgDl)  || 0);
+    result.wwPoints         = Math.round(Number(result.wwPoints)         || 0);
 
     return result;
   } catch {
@@ -367,6 +371,7 @@ ${ingredientList}
   "carbsGrams": <integer>,
   "fatGrams": <integer>,
   "glucoseRiseMgDl": <integer>,
+  "wwPoints": <integer>,
   "confidence": "high" | "medium" | "low",
   "notes": "brief note about estimation accuracy"
 }
@@ -376,6 +381,7 @@ Guidelines:
 - Sum nutritional totals across all ingredients
 - Ensure protein*4 + carbs*4 + fat*9 ≈ calories
 - glucoseRiseMgDl: estimated blood glucose rise in mg/dL for an average healthy adult (typical range: 20–100)
+- wwPoints: estimate Weight Watchers PersonalPoints using the standard WW methodology (based on calories, saturated fat, sugar, protein, and fiber content); typical meal range is 0–30 points
 - Set confidence to "medium" since this is a text-based estimate`;
 
   const priority = await getModelPriority();
@@ -407,4 +413,53 @@ Guidelines:
   const result = parseNutritionResult(data, 'Could not parse nutrition analysis from response');
   result.analyzedByModel = usedModel;
   return result;
+}
+
+// ─── Food Image Generation ────────────────────────────────────────────────────
+
+/**
+ * Generates a food photograph for a manually-entered meal using Gemini's
+ * image generation model. Returns the raw base64 string and mimeType so the
+ * caller can write it to disk and display it as a local URI.
+ *
+ * @param {string} foodName - The food description to illustrate
+ * @param {string} apiKey   - Google AI API key from settings
+ * @returns {{ base64: string, mimeType: string }}
+ */
+export async function generateFoodImage(foodName, apiKey) {
+  if (!apiKey?.trim()) {
+    throw new Error('Google AI API key not configured. Please add your key in Settings.');
+  }
+
+  const url = `${GEMINI_BASE}/gemini-2.0-flash-preview-image-generation:generateContent?key=${apiKey}`;
+
+  const res = await fetch(url, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({
+      contents: [{
+        parts: [{
+          text: `Professional food photography of ${foodName}. Appetizing, beautifully plated, soft natural lighting, shallow depth of field, top-down or 45-degree angle, clean background. No text or labels.`,
+        }],
+      }],
+      generationConfig: {
+        responseModalities: ['IMAGE', 'TEXT'],
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const msg = await res.text().catch(() => res.statusText);
+    throw new Error(`Image generation failed (${res.status}): ${msg.slice(0, 120)}`);
+  }
+
+  const data    = await res.json();
+  const parts   = data.candidates?.[0]?.content?.parts || [];
+  const imgPart = parts.find(p => p.inlineData?.mimeType?.startsWith('image/'));
+
+  if (!imgPart) {
+    throw new Error('Gemini did not return an image. The model may not be available on your API key tier.');
+  }
+
+  return { base64: imgPart.inlineData.data, mimeType: imgPart.inlineData.mimeType };
 }

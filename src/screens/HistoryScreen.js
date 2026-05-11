@@ -110,6 +110,7 @@ export default function HistoryScreen({ navigation }) {
   // Body weight tracking
   const [bodyWeightEnabled, setBodyWeightEnabled] = useState(false);
   const [weightUnit, setWeightUnit]               = useState('lbs');
+  const [wwPointsEnabled, setWwPointsEnabled]     = useState(false);
   // Stored weights per day: { [dateKey]: number | null }
   const [weights, setWeights]                     = useState({});
   // Text input values per day: { [dateKey]: string }
@@ -140,6 +141,7 @@ export default function HistoryScreen({ navigation }) {
     const enabled = !!settings.bodyWeightEnabled;
     setBodyWeightEnabled(enabled);
     setWeightUnit(settings.weightUnit || 'lbs');
+    setWwPointsEnabled(!!settings.wwPointsEnabled);
 
     const days = await Promise.all(
       dates.map(async (date) => {
@@ -149,7 +151,8 @@ export default function HistoryScreen({ navigation }) {
         const totalProtein  = meals.reduce((s, m) => s + (m.proteinGrams     || 0), 0);
         const totalCarbs    = meals.reduce((s, m) => s + (m.carbsGrams       || 0), 0);
         const totalFat      = meals.reduce((s, m) => s + (m.fatGrams         || 0), 0);
-        return { date, meals, totalCalories, totalWeight, totalProtein, totalCarbs, totalFat };
+        const totalWwPoints = meals.reduce((s, m) => s + (m.wwPoints         || 0), 0);
+        return { date, meals, totalCalories, totalWeight, totalProtein, totalCarbs, totalFat, totalWwPoints };
       })
     );
     setHistoryDays(days);
@@ -304,12 +307,15 @@ export default function HistoryScreen({ navigation }) {
                   )}
                 </View>
 
-                {/* Right side: total calories + meal count + food weight */}
+                {/* Right side: total calories + meal count + food weight + WW pts */}
                 <View style={styles.dayRight}>
                   <Text style={styles.dayCalories}>{item.totalCalories.toLocaleString()}</Text>
                   <Text style={styles.dayCalLabel}>cal</Text>
                   <Text style={styles.dayMealCount}>{item.meals.length} meals</Text>
                   <Text style={styles.dayWeight}>{item.totalWeight}g</Text>
+                  {wwPointsEnabled && item.totalWwPoints > 0 && (
+                    <Text style={styles.dayWwPoints}>{item.totalWwPoints} WW pts</Text>
+                  )}
                 </View>
 
                 {/* Chevron only in the header — add button moved to bottom of expanded list */}
@@ -360,6 +366,7 @@ export default function HistoryScreen({ navigation }) {
                     <View style={styles.daySummaryRow}>
                       <Text style={styles.daySummaryText}>
                         Total: {item.totalCalories.toLocaleString()} cal · P {item.totalProtein}g · C {item.totalCarbs}g · F {item.totalFat}g · {item.totalWeight.toLocaleString()}g
+                        {wwPointsEnabled && item.totalWwPoints > 0 ? ` · ${item.totalWwPoints} WW pts` : ''}
                       </Text>
                     </View>
                   )}
@@ -454,6 +461,7 @@ const styles = StyleSheet.create({
   dayCalLabel:  { fontSize: fontSize.xs, color: colors.textSecondary },
   dayMealCount: { fontSize: fontSize.sm, color: colors.textSecondary },
   dayWeight:    { fontSize: fontSize.sm, color: colors.textSecondary },
+  dayWwPoints:  { fontSize: fontSize.xs, color: '#1D4ED8', fontWeight: '700', marginTop: 2 },
 
   chevron: { fontSize: fontSize.sm, color: colors.textSecondary, width: 18, textAlign: 'center', marginLeft: spacing.xs },
 

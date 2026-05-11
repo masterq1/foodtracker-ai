@@ -3,6 +3,7 @@ import { Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import HomeScreen from '../screens/HomeScreen';
 import AnalysisScreen from '../screens/AnalysisScreen';
@@ -69,31 +70,44 @@ const TAB_ICONS = {
   SettingsTab: { focused: '⚙️', unfocused: '⚙️' },
 };
 
+// Separate component so useSafeAreaInsets can be called as a hook
+function TabNavigator() {
+  const insets = useSafeAreaInsets();
+  // 54px content area (icon + label) + system nav bar inset
+  const tabBarHeight = 54 + insets.bottom;
+
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarStyle: {
+          backgroundColor: colors.white,
+          borderTopColor: colors.border,
+          borderTopWidth: 1,
+          height: tabBarHeight,
+          paddingBottom: insets.bottom,
+          paddingTop: 6,
+        },
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textSecondary,
+        tabBarLabelStyle: { fontSize: fontSize.xs, fontWeight: '600' },
+        tabBarIcon: ({ focused }) => {
+          const icons = TAB_ICONS[route.name];
+          return <Text style={{ fontSize: 20 }}>{focused ? icons.focused : icons.unfocused}</Text>;
+        },
+      })}
+    >
+      <Tab.Screen name="HomeTab" component={HomeStackNavigator} options={{ title: 'Today' }} />
+      <Tab.Screen name="HistoryTab" component={HistoryStackNavigator} options={{ title: 'History' }} />
+      <Tab.Screen name="SettingsTab" component={SettingsScreen} options={{ title: 'Settings' }} />
+    </Tab.Navigator>
+  );
+}
+
 export default function AppNavigator() {
   return (
     <NavigationContainer>
-      <Tab.Navigator
-        screenOptions={({ route }) => ({
-          headerShown: false,
-          tabBarStyle: {
-            backgroundColor: colors.white,
-            borderTopColor: colors.border,
-            borderTopWidth: 1,
-            paddingTop: 6,
-          },
-          tabBarActiveTintColor: colors.primary,
-          tabBarInactiveTintColor: colors.textSecondary,
-          tabBarLabelStyle: { fontSize: fontSize.xs, fontWeight: '600', marginTop: 2 },
-          tabBarIcon: ({ focused }) => {
-            const icons = TAB_ICONS[route.name];
-            return <Text style={{ fontSize: 24 }}>{focused ? icons.focused : icons.unfocused}</Text>;
-          },
-        })}
-      >
-        <Tab.Screen name="HomeTab" component={HomeStackNavigator} options={{ title: 'Today' }} />
-        <Tab.Screen name="HistoryTab" component={HistoryStackNavigator} options={{ title: 'History' }} />
-        <Tab.Screen name="SettingsTab" component={SettingsScreen} options={{ title: 'Settings' }} />
-      </Tab.Navigator>
+      <TabNavigator />
     </NavigationContainer>
   );
 }

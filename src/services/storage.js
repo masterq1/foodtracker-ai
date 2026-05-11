@@ -52,10 +52,10 @@ export async function saveSettings(settings) {
 export async function getSettings() {
   try {
     const data = await AsyncStorage.getItem(SETTINGS_KEY);
-    const base = { apiKey: '', dailyCalorieGoal: 2000, averageDays: 5, weightUnit: 'lbs', autoSaveToGallery: false, bodyWeightEnabled: false };
+    const base = { apiKey: '', dailyCalorieGoal: 2000, averageDays: 3, weightUnit: 'lbs', autoSaveToGallery: false, bodyWeightEnabled: false, wwPointsEnabled: false };
     return data ? { ...base, ...JSON.parse(data) } : base;
   } catch {
-    return { apiKey: '', dailyCalorieGoal: 2000, averageDays: 5, weightUnit: 'lbs', autoSaveToGallery: false, bodyWeightEnabled: false };
+    return { apiKey: '', dailyCalorieGoal: 2000, averageDays: 3, weightUnit: 'lbs', autoSaveToGallery: false, bodyWeightEnabled: false, wwPointsEnabled: false };
   }
 }
 

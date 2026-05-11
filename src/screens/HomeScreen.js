@@ -90,6 +90,9 @@ export default function HomeScreen({ navigation }) {
   const [savingWeight, setSavingWeight]     = useState(false);
   const [avgWeight, setAvgWeight]           = useState(null);
   const [avgWeightDays, setAvgWeightDays]   = useState(0);
+  const [wwPointsEnabled, setWwPointsEnabled] = useState(false);
+  const [weeklyWwPoints, setWeeklyWwPoints]   = useState(null);
+  const [avgWwPoints, setAvgWwPoints]         = useState(null);
 
   // The date currently being viewed/edited — starts as today, navigable via arrows
   const [viewDate, setViewDate] = useState(getDateKey());
@@ -124,6 +127,7 @@ export default function HomeScreen({ navigation }) {
     setAverageDays(settings.averageDays || 5);
     setWeightUnit(settings.weightUnit || 'lbs');
     setBodyWeightEnabled(!!settings.bodyWeightEnabled);
+    setWwPointsEnabled(!!settings.wwPointsEnabled);
     setTodayWeight(storedWeight);
     setWeightInput(storedWeight !== null ? String(storedWeight) : '');
 
@@ -132,16 +136,39 @@ export default function HomeScreen({ navigation }) {
     const dates = await getHistoryDates();
     const recentDates = dates.slice(0, nDays);
     if (recentDates.length > 0) {
-      const calTotals = await Promise.all(
+      const dayTotals = await Promise.all(
         recentDates.map(async (d) => {
           const ms = await getMealsForDate(d);
-          return ms.reduce((s, m) => s + (m.totalCalories || 0), 0);
+          const cal = ms.reduce((s, m) => s + (m.totalCalories || 0), 0);
+          const ww  = ms.reduce((s, m) => s + (m.wwPoints      || 0), 0);
+          return { cal, ww };
         })
       );
-      const avg = Math.round(calTotals.reduce((s, v) => s + v, 0) / calTotals.length);
-      setAvgCalories(avg);
+      const avgCal = Math.round(dayTotals.reduce((s, v) => s + v.cal, 0) / dayTotals.length);
+      setAvgCalories(avgCal);
+      if (settings.wwPointsEnabled) {
+        setAvgWwPoints(Math.round(dayTotals.reduce((s, v) => s + v.ww, 0) / dayTotals.length));
+      } else {
+        setAvgWwPoints(null);
+      }
     } else {
       setAvgCalories(null);
+      setAvgWwPoints(null);
+    }
+
+    // Compute fixed 7-day WW total (independent of averageDays setting)
+    if (settings.wwPointsEnabled) {
+      let wwTotal = 0;
+      const now = new Date();
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        const ms = await getMealsForDate(getDateKey(d));
+        wwTotal += ms.reduce((s, m) => s + (m.wwPoints || 0), 0);
+      }
+      setWeeklyWwPoints(wwTotal);
+    } else {
+      setWeeklyWwPoints(null);
     }
 
     // Compute average body weight over the last N calendar days that have a reading
@@ -326,6 +353,7 @@ export default function HomeScreen({ navigation }) {
   const totalProtein  = meals.reduce((sum, m) => sum + (m.proteinGrams     || 0), 0);
   const totalCarbs    = meals.reduce((sum, m) => sum + (m.carbsGrams       || 0), 0);
   const totalFat      = meals.reduce((sum, m) => sum + (m.fatGrams         || 0), 0);
+  const totalWwPoints = meals.reduce((sum, m) => sum + (m.wwPoints         || 0), 0);
 
   // Progress bar fill ratio — capped at 1.0 (100%) so the bar doesn't overflow
   const progressRatio = Math.min(totalCalories / calorieGoal, 1);
@@ -429,6 +457,21 @@ export default function HomeScreen({ navigation }) {
             <View style={styles.avgRow}>
               <Text style={styles.avgText}>
                 {averageDays}-day avg: <Text style={styles.avgValue}>{avgCalories.toLocaleString()} cal/day</Text>
+              </Text>
+            </View>
+          )}
+
+          {/* WW points strip — only when feature is enabled */}
+          {wwPointsEnabled && (
+            <View style={styles.wwRow}>
+              <Text style={styles.wwText}>
+                WW pts today: <Text style={styles.wwValue}>{totalWwPoints}</Text>
+                {weeklyWwPoints !== null && (
+                  <Text style={styles.wwText}>{'  ·  '}7-day total: <Text style={styles.wwValue}>{weeklyWwPoints}</Text></Text>
+                )}
+                {avgWwPoints !== null && (
+                  <Text style={styles.wwText}>{'  ·  '}{averageDays}-day avg: <Text style={styles.wwValue}>{avgWwPoints}/day</Text></Text>
+                )}
               </Text>
             </View>
           )}
@@ -552,11 +595,14 @@ export default function HomeScreen({ navigation }) {
                   )}
                 </View>
 
-                {/* Right column: calorie count + weight + edit hint */}
+                {/* Right column: calorie count + weight + WW pts (if enabled) + edit hint */}
                 <View style={styles.mealRight}>
                   <Text style={styles.mealCalories}>{meal.totalCalories}</Text>
                   <Text style={styles.mealCalLabel}>cal</Text>
                   <Text style={styles.mealWeight}>{meal.totalWeightGrams}g</Text>
+                  {wwPointsEnabled && (meal.wwPoints || 0) > 0 && (
+                    <Text style={styles.mealWwPoints}>{meal.wwPoints} pts</Text>
+                  )}
                   <Text style={styles.editHint}>tap to edit</Text>
                 </View>
               </TouchableOpacity>
@@ -673,6 +719,12 @@ const styles = StyleSheet.create({
   avgRow:   { marginBottom: spacing.sm, paddingVertical: spacing.xs, borderRadius: radius.sm, backgroundColor: colors.primaryLight, alignItems: 'center' },
   avgText:  { fontSize: fontSize.sm, color: colors.primaryDark },
   avgValue: { fontWeight: '700' },
+
+  // WW points strip inside summary card
+  wwRow:   { marginBottom: spacing.sm, paddingVertical: spacing.xs, borderRadius: radius.sm, backgroundColor: '#EFF6FF', alignItems: 'center' },
+  wwText:  { fontSize: fontSize.sm, color: '#1E40AF' },
+  wwValue: { fontWeight: '700' },
+  mealWwPoints: { fontSize: fontSize.xs, color: '#1D4ED8', fontWeight: '700', marginTop: 1 },
 
   // Daily weight card
   weightCard: {
