@@ -67,19 +67,19 @@ Food Tracker AI is a mobile app that turns your phone camera into a nutrition ex
 
 ```mermaid
 flowchart TD
-    A([📷 Take Photo\nor Pick from Gallery]) --> B[expo-image-picker\nreturns URI + base64]
-    B --> C{API Key\nconfigured?}
-    C -- No --> D[⚙️ Prompt user\nto open Settings]
-    C -- Yes --> E[AnalysisScreen\nshows preview]
-    E --> F[Gemini API\nv1beta multimodal]
-    F --> G{Model cascade\nPriority 1 → 2 → 3}
-    G -- Success --> H[Parse JSON response\nCalories · Macros · WW pts\nGlucose · Ingredients]
-    G -- All limits hit --> I[❌ Show error]
-    H --> J{User reviews\nresults}
-    J -- Edit --> K[Edit date / time /\ncalories / macros /\nWW pts / glucose]
-    J -- Save --> L[addMealDirect\nto AsyncStorage]
+    A([Take Photo or Pick from Gallery]) --> B[expo-image-picker returns URI + base64]
+    B --> C{API Key configured?}
+    C -- No --> D[Prompt user to open Settings]
+    C -- Yes --> E[AnalysisScreen shows preview]
+    E --> F[Gemini API v1beta multimodal]
+    F --> G{Model cascade: Priority 1 to 2 to 3}
+    G -- Success --> H[Parse JSON: Calories, Macros, WW pts, Glucose, Ingredients]
+    G -- All limits hit --> I[Show error to user]
+    H --> J{User reviews results}
+    J -- Edit --> K[Edit date, time, calories, macros, WW pts, glucose]
+    J -- Save --> L[addMealDirect to AsyncStorage]
     K --> L
-    L --> M([🏠 HomeScreen\nupdates totals])
+    L --> M([HomeScreen updates totals])
 
     style A fill:#4CAF50,color:#fff
     style H fill:#1D4ED8,color:#fff
