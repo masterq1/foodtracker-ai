@@ -42,7 +42,6 @@ Food Tracker AI is a mobile app that turns your phone camera into a nutrition ex
 </table>
 </div>
 
-> **To add screenshots:** take screenshots on your device, save them to a `screenshots/` folder in the repo root, and push.
 
 ---
 
