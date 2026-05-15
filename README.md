@@ -34,10 +34,10 @@ Food Tracker AI is a mobile app that turns your phone camera into a nutrition ex
     <td align="center"><b>Settings</b></td>
   </tr>
   <tr>
-    <td><img src="screenshots/home.jpg" alt="Home Screen" width="180"/></td>
-    <td><img src="screenshots/analysis.jpg" alt="Analysis Screen" width="180"/></td>
-    <td><img src="screenshots/history.jpg" alt="History Screen" width="180"/></td>
-    <td><img src="screenshots/settings.jpg" alt="Settings Screen" width="180"/></td>
+    <td><img src="screenshots/home.png" alt="Home Screen" width="180"/></td>
+    <td><img src="screenshots/analysis.png" alt="Analysis Screen" width="180"/></td>
+    <td><img src="screenshots/history.png" alt="History Screen" width="180"/></td>
+    <td><img src="screenshots/settings.png" alt="Settings Screen" width="180"/></td>
   </tr>
 </table>
 </div>
